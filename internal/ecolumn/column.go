@@ -2,9 +2,10 @@ package ecolumn
 
 import (
 	"fmt"
-	"github.com/tobgu/qframe/config/rolling"
 	"reflect"
 	"strings"
+
+	"github.com/tobgu/qframe/config/rolling"
 
 	"github.com/tobgu/qframe/filter"
 	"github.com/tobgu/qframe/internal/column"
@@ -47,6 +48,14 @@ type Column struct {
 type Factory struct {
 	column    Column
 	valToEnum map[string]enumVal
+}
+
+func (c Column) Get(i uint32) interface{} {
+	return c.data[i]
+}
+
+func (c Column) Set(i uint32, val interface{}) {
+	c.data[i] = val.(enumVal)
 }
 
 func New(data []*string, values []string) (Column, error) {

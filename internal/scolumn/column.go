@@ -3,6 +3,9 @@ package scolumn
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
+	"reflect"
+
 	"github.com/tobgu/qframe/config/rolling"
 	"github.com/tobgu/qframe/internal/column"
 	"github.com/tobgu/qframe/internal/hash"
@@ -10,8 +13,6 @@ import (
 	qfstrings "github.com/tobgu/qframe/internal/strings"
 	"github.com/tobgu/qframe/qerrors"
 	"github.com/tobgu/qframe/types"
-	"math/rand"
-	"reflect"
 )
 
 var stringApplyFuncs = map[string]func(index.Int, Column) interface{}{
@@ -48,6 +49,36 @@ func (c Column) StringAt(i uint32, naRep string) string {
 	}
 
 	return naRep
+}
+
+func (c Column) Get(i uint32) interface{} {
+	s, _ := c.stringAt(i)
+	return s
+}
+
+func (c Column) Set(i uint32, val interface{}) {
+	fmt.Println(val)
+	p := c.pointers[i]
+	inval := []byte(val.(string))
+	if p.Len() >= len(inval) {
+		c.pointers[i] = qfstrings.NewPointer(p.Offset(), len(inval), false)
+		for j := p.Offset(); j < p.Offset()+len(inval); j++ {
+			c.data[j] = inval[j-p.Offset()]
+		}
+	} else {
+		d := make([]byte, 0, len(c.data)+len(inval))
+		dif := len(inval) - p.Len()
+		d = append(d, c.data[:p.Offset()]...)
+		d = append(d, inval...)
+		c.pointers[i] = qfstrings.NewPointer(p.Offset(), len(inval), false)
+		d = append(d, c.data[p.Offset()+p.Len():]...)
+		c.data = d
+		for j := int(i + 1); j < len(c.pointers); j++ {
+			p = c.pointers[j]
+			c.pointers[j] = qfstrings.NewPointer(p.Offset()+dif, p.Len(), false)
+		}
+	}
+	// c.data[i] = val.(byte)
 }
 
 func (c Column) stringSlice(index index.Int) []*string {

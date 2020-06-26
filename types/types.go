@@ -26,6 +26,9 @@ const (
 	// An enum column can, at most, have 254 distinct values.
 	Enum = "enum"
 
+	// Datetime translates into Go time.Time type
+	Datetime = "datetime"
+
 	// Undefined represents an unspecified data type.
 	// This is used for zero length columns where the datatype could not be identified.
 	Undefined DataType = "Undefined"
@@ -35,11 +38,13 @@ const (
 type FunctionType byte
 
 const (
+	// FunctionTypeUndefined bla
 	FunctionTypeUndefined FunctionType = iota
 	FunctionTypeInt
 	FunctionTypeFloat
 	FunctionTypeBool
 	FunctionTypeString
+	FunctionTypeDatetime
 )
 
 func (t FunctionType) String() string {
@@ -54,6 +59,8 @@ func (t FunctionType) String() string {
 		return "Float function"
 	case FunctionTypeUndefined:
 		return "Undefined type function"
+	case FunctionTypeDatetime:
+		return "Datetime function"
 	default:
 		return "Unknown function"
 	}

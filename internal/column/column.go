@@ -2,6 +2,7 @@ package column
 
 import (
 	"fmt"
+
 	"github.com/tobgu/qframe/config/rolling"
 
 	"github.com/tobgu/qframe/internal/index"
@@ -19,6 +20,8 @@ type Column interface {
 	AppendByteStringAt(buf []byte, i uint32) []byte
 	ByteSize() int
 	Len() int
+	Get(i uint32) interface{}
+	Set(i uint32, val interface{})
 
 	Apply1(fn interface{}, ix index.Int) (interface{}, error)
 	Apply2(fn interface{}, s2 Column, ix index.Int) (Column, error)

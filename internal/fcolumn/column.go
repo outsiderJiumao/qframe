@@ -1,12 +1,13 @@
 package fcolumn
 
 import (
-	"github.com/tobgu/qframe/internal/ryu"
 	"math"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"unsafe"
+
+	"github.com/tobgu/qframe/internal/ryu"
 
 	"github.com/tobgu/qframe/internal/column"
 	"github.com/tobgu/qframe/internal/hash"
@@ -17,6 +18,14 @@ import (
 
 func (c Column) DataType() types.DataType {
 	return types.Float
+}
+
+func (c Column) Get(i uint32) interface{} {
+	return c.data[i]
+}
+
+func (c Column) Set(i uint32, val interface{}) {
+	c.data[i] = val.(float64)
 }
 
 func (c Column) StringAt(i uint32, naRep string) string {

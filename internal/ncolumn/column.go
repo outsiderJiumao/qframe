@@ -15,6 +15,14 @@ import (
 
 type Column struct{}
 
+func (c Column) Get(i uint32) interface{} {
+	return nil
+}
+
+func (c Column) Set(i uint32, val interface{}) {
+
+}
+
 func (c Column) String() string {
 	return "[]"
 }

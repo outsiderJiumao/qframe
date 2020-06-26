@@ -25,6 +25,14 @@ func New(d []bool) Column {
 	return Column{data: d}
 }
 
+func (c Column) Get(i uint32) interface{} {
+	return c.data[i]
+}
+
+func (c Column) Set(i uint32, val interface{}) {
+	c.data[i] = val.(bool)
+}
+
 func NewConst(val bool, count int) Column {
 	var nullVal bool
 	data := make([]bool, count)

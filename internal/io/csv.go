@@ -1,8 +1,10 @@
 package io
 
 import (
+	"fmt"
 	"io"
 	"math"
+	"time"
 
 	"github.com/tobgu/qframe/internal/ecolumn"
 	"github.com/tobgu/qframe/internal/fastcsv"
@@ -154,6 +156,23 @@ func columnToData(bytes []byte, pointers []bytePointer, colName string, conf CSV
 		return ncolumn.Column{}, nil
 	}
 
+	if dataType == types.Datetime {
+		Data := make([]time.Time, 0, len(pointers))
+		for _, p := range pointers {
+
+			x, err := time.Parse("2006-01-02", string(bytes[p.start:p.end]))
+			if err != nil {
+				fmt.Println(string(bytes[p.start:p.end]))
+				fmt.Println(err)
+				break
+			}
+			Data = append(Data, x)
+
+		}
+		// fmt.Println(len(Data))
+		return Data, nil
+	}
+
 	if dataType == types.Int || dataType == types.None {
 		intData := make([]int, 0, len(pointers))
 		for _, p := range pointers {
@@ -230,7 +249,7 @@ func columnToData(bytes []byte, pointers []bytePointer, colName string, conf CSV
 				stringPointers[i] = strings.NewPointer(int(p.start), int(p.end-p.start), false)
 			}
 		}
-
+		//fmt.Println(len(stringPointers))
 		return strings.StringBlob{Pointers: stringPointers, Data: bytes}, nil
 	}
 

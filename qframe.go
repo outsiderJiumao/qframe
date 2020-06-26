@@ -4,11 +4,13 @@ import (
 	"database/sql"
 	stdcsv "encoding/csv"
 	"fmt"
-	"github.com/tobgu/qframe/config/rolling"
 	"io"
 	"reflect"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/tobgu/qframe/config/rolling"
 
 	"github.com/tobgu/qframe/config/csv"
 	"github.com/tobgu/qframe/config/eval"
@@ -29,6 +31,7 @@ import (
 	"github.com/tobgu/qframe/internal/scolumn"
 	qfsort "github.com/tobgu/qframe/internal/sort"
 	qfstrings "github.com/tobgu/qframe/internal/strings"
+	"github.com/tobgu/qframe/internal/tcolumn"
 	"github.com/tobgu/qframe/qerrors"
 	"github.com/tobgu/qframe/types"
 
@@ -67,6 +70,83 @@ func (qf QFrame) withIndex(ix index.Int) QFrame {
 	return QFrame{Err: qf.Err, columns: qf.columns, columnsByName: qf.columnsByName, index: ix}
 }
 
+func (qf QFrame) Shape() (int, int) {
+	return qf.columns[0].Len(), len(qf.columns)
+}
+
+func (qf QFrame) Get(ix uint32, colName string) interface{} {
+	return qf.columnsByName[colName].Column.Get(qf.index[ix])
+}
+
+func (qf *QFrame) Set(ix uint32, colName string, val interface{}) {
+	// fmt.Println(val)
+	col, err := qf.columnsByName[colName]
+	if !err {
+		// fmt.Println(err)
+		// fmt.Printf("%T,\n", val)
+
+		localCol2, err := qf.CreateNewColumn(colName, val)
+
+		if err != nil {
+			fmt.Println("createcolumn failed")
+			return
+		}
+
+		col = namedColumn{name: colName, Column: localCol2, pos: len(qf.columns)}
+		qf.columns = append(qf.columns, col)
+		qf.columnsByName[colName] = col
+		fmt.Println(qf)
+		return
+	}
+	// fmt.Println(val)
+	col.Column.Set(qf.index[ix], val)
+}
+
+func (qf *QFrame) CreateNewColumn(colName string, val interface{}) (column.Column, error) {
+	var err error
+	var localS column.Column
+	config := newqf.NewConfig([]newqf.ConfigFunc{})
+	switch t := val.(type) {
+	case int:
+		data := make([]int, qf.columns[0].Column.Len())
+		for k := range data {
+			data[k] = t
+		}
+		localS, err = createColumn(colName, data, config)
+	case float64:
+		data := make([]float64, qf.columns[0].Column.Len())
+		for k := range data {
+			data[k] = t
+		}
+		localS, err = createColumn(colName, data, config)
+	case string:
+		data := make([]string, qf.columns[0].Column.Len())
+		for k := range data {
+			data[k] = t
+		}
+		localS, err = createColumn(colName, data, config)
+	case bool:
+		data := make([]bool, qf.columns[0].Column.Len())
+		for k := range data {
+			data[k] = t
+		}
+		localS, err = createColumn(colName, data, config)
+	case time.Time:
+		data := make([]time.Time, qf.columns[0].Column.Len())
+		for k := range data {
+			data[k] = t
+		}
+		localS, err = createColumn(colName, data, config)
+	default:
+		return nil, qerrors.New("createColumn", `unknown column data type "%s" for column "%s"`, reflect.TypeOf(t), colName)
+	}
+	if err != nil {
+		fmt.Println(err)
+		return nil, qerrors.New("createColumn", ` for column "%s"`, colName)
+	}
+	return localS, nil
+}
+
 // ConstString describes a string column with only one value. It can be used
 // during during construction of new QFrames.
 type ConstString struct {
@@ -97,8 +177,9 @@ type ConstBool struct {
 
 func createColumn(name string, data interface{}, config *newqf.Config) (column.Column, error) {
 	var localS column.Column
-
+	// fmt.Println(data.([]string))
 	if sc, ok := data.([]string); ok {
+		// fmt.Println("string")
 		// Convenience conversion to support string slices in addition
 		// to string pointer slices.
 		sp := make([]*string, len(sc))
@@ -118,6 +199,8 @@ func createColumn(name string, data interface{}, config *newqf.Config) (column.C
 		localS = fcolumn.New(t)
 	case ConstFloat:
 		localS = fcolumn.NewConst(t.Val, t.Count)
+	// case []string:
+	// 	d = make([]*string, len())
 	case []*string:
 		if values, ok := config.EnumColumns[name]; ok {
 			localS, err = ecolumn.New(t, values)
@@ -151,6 +234,8 @@ func createColumn(name string, data interface{}, config *newqf.Config) (column.C
 		localS = scolumn.NewBytes(t.Pointers, t.Data)
 	case column.Column:
 		localS = t
+	case []time.Time:
+		localS = tcolumn.New(t)
 	default:
 		return nil, qerrors.New("createColumn", `unknown column data type "%s" for column "%s"`, reflect.TypeOf(t), name)
 	}
@@ -644,7 +729,7 @@ func (qf QFrame) String() string {
 	result := make([]string, 0, len(qf.index))
 	row := make([]string, len(qf.columns))
 	colWidths := make([]int, len(qf.columns))
-	minColWidth := 5
+	minColWidth := 10
 	for i, s := range qf.columns {
 		colHeader := s.name + "(" + string(s.DataType())[:1] + ")"
 		colWidths[i] = integer.Max(len(colHeader), minColWidth)
@@ -657,7 +742,7 @@ func (qf QFrame) String() string {
 	}
 	result = append(result, strings.Join(row, " "))
 
-	maxRowCount := 50
+	maxRowCount := 15
 	for i := 0; i < integer.Min(qf.Len(), maxRowCount); i++ {
 		for j, s := range qf.columns {
 			row[j] = fixLengthString(s.StringAt(qf.index[i], "null"), " ", colWidths[j])
@@ -979,6 +1064,7 @@ func (qf QFrame) functionType(name string) (types.FunctionType, error) {
 //
 // Time complexity O(m * n) where m = number of columns, n = number of rows.
 func ReadCSV(reader io.Reader, confFuncs ...csv.ConfigFunc) QFrame {
+	// print()
 	conf := csv.NewConfig(confFuncs)
 	data, columns, err := qfio.ReadCSV(reader, qfio.CSVConfig(conf))
 	if err != nil {

@@ -1,8 +1,9 @@
-package icolumn
+package tcolumn
 
 import (
 	"reflect"
 	"strconv"
+	"time"
 	"unsafe"
 
 	"github.com/tobgu/qframe/internal/column"
@@ -13,7 +14,11 @@ import (
 )
 
 func (c Column) DataType() types.DataType {
-	return types.Int
+	return types.Datetime
+}
+
+func (c Column) StringAt(i uint32, _ string) string {
+	return c.data[i].Format("2006-01-02")
 }
 
 func (c Column) Get(i uint32) interface{} {
@@ -21,15 +26,11 @@ func (c Column) Get(i uint32) interface{} {
 }
 
 func (c Column) Set(i uint32, val interface{}) {
-	c.data[i] = val.(int)
-}
-
-func (c Column) StringAt(i uint32, _ string) string {
-	return strconv.FormatInt(int64(c.data[i]), 10)
+	c.data[i] = val.(time.Time)
 }
 
 func (c Column) AppendByteStringAt(buf []byte, i uint32) []byte {
-	return strconv.AppendInt(buf, int64(c.data[i]), 10)
+	return strconv.AppendInt(buf, int64(1), 10)
 }
 
 func (c Column) ByteSize() int {
@@ -55,7 +56,7 @@ func (c Column) Equals(index index.Int, other column.Column, otherIndex index.In
 func (c Column) FloatSlice() []float64 {
 	result := make([]float64, len(c.data))
 	for i, v := range c.data {
-		result[i] = float64(v)
+		result[i] = float64(v.Unix())
 	}
 
 	return result
@@ -63,11 +64,11 @@ func (c Column) FloatSlice() []float64 {
 
 func (c Comparable) Compare(i, j uint32) column.CompareResult {
 	x, y := c.data[i], c.data[j]
-	if x < y {
+	if x.Before(y) {
 		return c.ltValue
 	}
 
-	if x > y {
+	if x.After(y) {
 		return c.gtValue
 	}
 
@@ -80,21 +81,16 @@ func (c Comparable) Hash(i uint32, seed uint64) uint64 {
 	return hash.HashBytes(b, seed)
 }
 
-func intComp(comparatee interface{}) (int, bool) {
-	comp, ok := comparatee.(int)
+func intComp(comparatee interface{}) (time.Time, bool) {
+	comp, ok := comparatee.(time.Time)
 	if !ok {
-		// Accept floats by truncating them
-		compFloat, ok := comparatee.(float64)
-		if !ok {
-			return 0, false
-		}
-		comp = int(compFloat)
+		return time.Now(), false
 	}
 
 	return comp, true
 }
 
-type intSet map[int]struct{}
+type intSet map[time.Time]struct{}
 
 func interfaceSliceToIntSlice(ss []interface{}) ([]int, bool) {
 	result := make([]int, len(ss))
@@ -115,15 +111,10 @@ func newIntSet(input interface{}) (intSet, bool) {
 	var result intSet
 	var ok bool
 	switch t := input.(type) {
-	case []int:
+	case []time.Time:
 		result, ok = make(intSet, len(t)), true
 		for _, v := range t {
 			result[v] = struct{}{}
-		}
-	case []float64:
-		result, ok = make(intSet, len(t)), true
-		for _, v := range t {
-			result[int(v)] = struct{}{}
 		}
 	case []interface{}:
 		if intSlice, innerOk := interfaceSliceToIntSlice(t); innerOk {
@@ -134,7 +125,7 @@ func newIntSet(input interface{}) (intSet, bool) {
 	return result, ok
 }
 
-func (is intSet) Contains(x int) bool {
+func (is intSet) Contains(x time.Time) bool {
 	_, ok := is[x]
 	return ok
 }
@@ -171,7 +162,7 @@ func (c Column) filterBuiltIn(index index.Int, comparator string, comparatee int
 	return nil
 }
 
-func (c Column) filterCustom1(index index.Int, fn func(int) bool, bIndex index.Bool) {
+func (c Column) filterCustom1(index index.Int, fn func(time.Time) bool, bIndex index.Bool) {
 	for i, x := range bIndex {
 		if !x {
 			bIndex[i] = fn(c.data[index[i]])
@@ -179,7 +170,7 @@ func (c Column) filterCustom1(index index.Int, fn func(int) bool, bIndex index.B
 	}
 }
 
-func (c Column) filterCustom2(index index.Int, fn func(int, int) bool, comparatee interface{}, bIndex index.Bool) error {
+func (c Column) filterCustom2(index index.Int, fn func(time.Time, time.Time) bool, comparatee interface{}, bIndex index.Bool) error {
 	otherC, ok := comparatee.(Column)
 	if !ok {
 		return qerrors.New("filter int", "expected comparatee to be int column, was %v", reflect.TypeOf(comparatee))
@@ -199,9 +190,9 @@ func (c Column) Filter(index index.Int, comparator interface{}, comparatee inter
 	switch t := comparator.(type) {
 	case string:
 		err = c.filterBuiltIn(index, t, comparatee, bIndex)
-	case func(int) bool:
+	case func(time.Time) bool:
 		c.filterCustom1(index, t, bIndex)
-	case func(int, int) bool:
+	case func(time.Time, time.Time) bool:
 		err = c.filterCustom2(index, t, comparatee, bIndex)
 	default:
 		err = qerrors.New("filter int", "invalid filter type %v", reflect.TypeOf(comparator))
